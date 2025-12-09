@@ -5,7 +5,7 @@ export function usePrivateRoute() {
   return useQuery({
     queryKey: ["private-user"],
     queryFn: async () => {
-      const res = await axiosInstance.get("/private");
+      const res = await axiosInstance.get("v1/department/");
       return res.data;
     },
     enabled: false,

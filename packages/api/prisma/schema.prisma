@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -13,7 +7,334 @@ datasource db {
   provider = "postgresql"
 }
 
-model Test {
-  id   String @id @default(uuid())
-  test String
+enum Role {
+  ADMIN
+  HOD
+  TEACHER
+}
+
+enum EducationYear {
+  FY
+  SY
+  TY
+  LAST
+}
+
+/**
+ * -------- MODELS --------
+ */
+
+model Department {
+  id             String @id @default(uuid())
+  departmentName String @unique
+
+  hods             Hod[]
+  teachers         Teacher[]
+  courses          Course[]
+  classes          Class[]
+  academicCalendar AcademicCalendar[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
+}
+
+model Hod {
+  id            String @id @default(uuid())
+  clerkUserId   String @unique
+  clerkFullName String
+  clerkEmail    String @unique
+  clerkImg      String
+
+  departmentId String     @unique
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Teacher {
+  id            String @id @default(uuid())
+  clerkUserId   String @unique
+  clerkFullName String
+  clerkEmail    String @unique
+  clerkImg      String
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  timetable Timetable[]
+  courses   Course[]
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  studyMaterials StudyMaterial[]
+  assignments    Assignment[]
+
+  @@index([departmentId])
+}
+
+model AcademicCalendar {
+  id        String       @id @default(uuid())
+  title     String
+  type      CalendarType
+  startDate DateTime
+  endDate   DateTime?
+  details   String?
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+
+  @@index([departmentId])
+}
+
+enum CalendarType {
+  HOLIDAY
+  EVENT
+  EXAM_WEEK
+  SEMESTER_START
+  SEMESTER_END
+}
+
+model Notification {
+  id      String @id @default(uuid())
+  title   String
+  message String
+
+  senderId   String
+  senderRole Role
+
+  audienceType AudienceType
+  departmentId String?
+  classId      String?
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  class      Class?      @relation(fields: [classId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([departmentId])
+}
+
+enum AudienceType {
+  ALL
+  DEPARTMENT
+  CLASS
+  STUDENT
+  TEACHER
+}
+
+model StudyMaterial {
+  id      String       @id @default(uuid())
+  title   String
+  fileUrl String
+  type    MaterialType
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+}
+
+enum MaterialType {
+  PDF
+  PPT
+  VIDEO
+  LINK
+  DOC
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  dueDate     DateTime
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions Submission[]
+
+  @@index([courseId, teacherId])
+}
+
+model Submission {
+  id       String  @id @default(uuid())
+  fileUrl  String
+  grade    Float?
+  feedback String?
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  submittedAt DateTime @default(now())
+
+  @@index([studentId, assignmentId])
+}
+
+model Exam {
+  id         String   @id @default(uuid())
+  title      String
+  examDate   DateTime
+  totalMarks Int
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results Result[]
+}
+
+model Result {
+  id    String  @id @default(uuid())
+  marks Float
+  grade String?
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, examId])
+}
+
+model Attendance {
+  id     String           @id @default(uuid())
+  date   DateTime
+  status AttendanceStatus
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date, courseId]) // no duplicate marking
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model Course {
+  id          String  @id @default(uuid())
+  courseCode  String  @unique
+  courseName  String
+  semester    Int
+  description String?
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  classes Class[] @relation("CourseToClass")
+
+  timetable Timetable[]
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  studyMaterials StudyMaterial[]
+  assignments    Assignment[]
+  exams          Exam[]
+  attendances    Attendance[]
+
+  @@unique([courseName, semester, departmentId])
+}
+
+model Student {
+  id            String @id @default(uuid())
+  clerkUserId   String @unique
+  clerkFullName String
+  clerkEmail    String @unique
+  clerkImg      String
+
+  educationYear EducationYear
+  course        String
+
+  classId String?
+  class   Class?  @relation(fields: [classId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  submissions Submission[]
+  results     Result[]
+  attendances Attendance[]
+
+  @@index([classId])
+}
+
+model Class {
+  id           String  @id @default(uuid())
+  className    String
+  departmentId String?
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  students  Student[]
+  timetable Timetable[]
+
+  courses Course[] @relation("CourseToClass")
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
+  attendances   Attendance[]
+
+  @@unique([className, departmentId])
+}
+
+model Timetable {
+  id        String   @id @default(uuid())
+  day       String
+  startTime DateTime
+  endTime   DateTime
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, startTime, classId, courseId])
 }

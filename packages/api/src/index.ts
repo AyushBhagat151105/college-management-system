@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { clerkPlugin } from "elysia-clerk";
 import { openapi } from "@elysiajs/openapi";
 import cors from "@elysiajs/cors";
+import { departmentRouter } from "./routes/department.route";
 
 const app = new Elysia()
   .use(
@@ -14,29 +15,15 @@ const app = new Elysia()
     })
   )
   .use(clerkPlugin())
-  .use(openapi())
-  .get("/private", async ({ auth, clerk }) => {
-    const { userId } = auth();
-    console.log(userId);
-
-    if (!userId) {
-      throw new Error("Unauthorized");
-    }
-
-    const user = await clerk.users.getUser(userId);
-
-    const craeteUser = await clerk.users.createUser({
-      emailAddress: ["sutharharsh108@gmail.com"],
-      firstName: "Harsh",
-      lastName: "Suthar",
-      password: "Harsh@140710",
-    });
-
-    console.log(craeteUser);
-
-    return { user };
-  })
-  .listen(3001);
+  .use(
+    openapi({
+      documentation: {
+        info: { title: "College Management System", version: "1.0.0" },
+      },
+    })
+  )
+  .use(departmentRouter)
+  .listen(Bun.env.PORT as string);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

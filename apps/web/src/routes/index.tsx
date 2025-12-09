@@ -1,4 +1,4 @@
-import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignInButton, useAuth, UserButton, useUser } from "@clerk/clerk-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { usePrivateRoute } from "@/hooks/usePrivate";
 
@@ -9,6 +9,8 @@ export const Route = createFileRoute("/")({
 function App() {
   const { user } = useUser();
   const privateQuery = usePrivateRoute();
+
+
 
   return (
     <div>
