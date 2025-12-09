@@ -11,6 +11,7 @@ enum Role {
   ADMIN
   HOD
   TEACHER
+  STUDENT
 }
 
 enum EducationYear {
@@ -21,57 +22,59 @@ enum EducationYear {
 }
 
 /**
- * -------- MODELS --------
+ * ---------------- USERS ----------------
+ */
+
+model User {
+  id          String  @id @default(uuid())
+  clerkUserId String  @unique
+  fullName    String
+  email       String  @unique
+  profileImg  String?
+
+  role Role
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  classId       String? // Only students use it
+  class         Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  educationYear EducationYear?
+
+  /**
+   * Relations
+   */
+  timetable       Timetable[]
+  coursesTeaching Course[]        @relation("TeacherCourses")
+  submissions     Submission[]
+  results         Result[]
+  attendances     Attendance[]
+  notifications   Notification[]  @relation("UserNotifications")
+  materials       StudyMaterial[]
+  assignments     Assignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+}
+
+/**
+ * ---------------- ACADEMIC MODELS ----------------
  */
 
 model Department {
   id             String @id @default(uuid())
   departmentName String @unique
 
-  hods             Hod[]
-  teachers         Teacher[]
+  users            User[]
   courses          Course[]
   classes          Class[]
   academicCalendar AcademicCalendar[]
-
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  notifications Notification[]
-}
-
-model Hod {
-  id            String @id @default(uuid())
-  clerkUserId   String @unique
-  clerkFullName String
-  clerkEmail    String @unique
-  clerkImg      String
-
-  departmentId String     @unique
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  notifications    Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-model Teacher {
-  id            String @id @default(uuid())
-  clerkUserId   String @unique
-  clerkFullName String
-  clerkEmail    String @unique
-  clerkImg      String
-
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-
-  timetable Timetable[]
-  courses   Course[]
-
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  studyMaterials StudyMaterial[]
-  assignments    Assignment[]
-
-  @@index([departmentId])
 }
 
 model AcademicCalendar {
@@ -82,12 +85,11 @@ model AcademicCalendar {
   endDate   DateTime?
   details   String?
 
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  department   Department? @relation(fields: [departmentId], references: [id])
   departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-  @@index([departmentId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum CalendarType {
@@ -98,12 +100,25 @@ enum CalendarType {
   SEMESTER_END
 }
 
+/**
+ * ---------------- NOTIFICATION ----------------
+ */
+
+enum AudienceType {
+  ALL
+  DEPARTMENT
+  CLASS
+  STUDENT
+  TEACHER
+}
+
 model Notification {
   id      String @id @default(uuid())
   title   String
   message String
 
   senderId   String
+  sender     User   @relation("UserNotifications", fields: [senderId], references: [id])
   senderRole Role
 
   audienceType AudienceType
@@ -115,35 +130,11 @@ model Notification {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([departmentId])
 }
 
-enum AudienceType {
-  ALL
-  DEPARTMENT
-  CLASS
-  STUDENT
-  TEACHER
-}
-
-model StudyMaterial {
-  id      String       @id @default(uuid())
-  title   String
-  fileUrl String
-  type    MaterialType
-
-  teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-
-  courseId String
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([courseId])
-}
+/**
+ * ---------------- COURSE & MATERIALS ----------------
+ */
 
 enum MaterialType {
   PDF
@@ -153,6 +144,22 @@ enum MaterialType {
   DOC
 }
 
+model StudyMaterial {
+  id      String       @id @default(uuid())
+  title   String
+  fileUrl String
+  type    MaterialType
+
+  teacherId String
+  teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Assignment {
   id          String   @id @default(uuid())
   title       String
@@ -160,17 +167,15 @@ model Assignment {
   dueDate     DateTime
 
   teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher   User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   courseId String
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
   submissions Submission[]
 
-  @@index([courseId, teacherId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Submission {
@@ -180,15 +185,17 @@ model Submission {
   feedback String?
 
   studentId String
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   assignmentId String
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
   submittedAt DateTime @default(now())
-
-  @@index([studentId, assignmentId])
 }
+
+/**
+ * ---------------- EXAMS & RESULTS ----------------
+ */
 
 model Exam {
   id         String   @id @default(uuid())
@@ -197,12 +204,12 @@ model Exam {
   totalMarks Int
 
   courseId String
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course   Course @relation(fields: [courseId], references: [id])
+
+  results Result[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  results Result[]
 }
 
 model Result {
@@ -211,7 +218,7 @@ model Result {
   grade String?
 
   studentId String
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   examId String
   exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
@@ -222,25 +229,9 @@ model Result {
   @@unique([studentId, examId])
 }
 
-model Attendance {
-  id     String           @id @default(uuid())
-  date   DateTime
-  status AttendanceStatus
-
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  classId String
-  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
-
-  courseId String
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([studentId, date, courseId]) // no duplicate marking
-}
+/**
+ * ---------------- ATTENDANCE ----------------
+ */
 
 enum AttendanceStatus {
   PRESENT
@@ -248,6 +239,30 @@ enum AttendanceStatus {
   LATE
   EXCUSED
 }
+
+model Attendance {
+  id     String           @id @default(uuid())
+  date   DateTime
+  status AttendanceStatus
+
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date, courseId])
+}
+
+/**
+ * ---------------- CLASS SYSTEM ----------------
+ */
 
 model Course {
   id          String  @id @default(uuid())
@@ -257,63 +272,41 @@ model Course {
   description String?
 
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id])
 
   teacherId String?
-  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  teacher   User?   @relation("TeacherCourses", fields: [teacherId], references: [id], onDelete: SetNull)
 
-  classes Class[] @relation("CourseToClass")
-
+  classes   Class[]     @relation("CourseToClass")
   timetable Timetable[]
 
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
   studyMaterials StudyMaterial[]
   assignments    Assignment[]
   exams          Exam[]
   attendances    Attendance[]
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([courseName, semester, departmentId])
 }
 
-model Student {
-  id            String @id @default(uuid())
-  clerkUserId   String @unique
-  clerkFullName String
-  clerkEmail    String @unique
-  clerkImg      String
-
-  educationYear EducationYear
-  course        String
-
-  classId String?
-  class   Class?  @relation(fields: [classId], references: [id], onDelete: SetNull)
-
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  submissions Submission[]
-  results     Result[]
-  attendances Attendance[]
-
-  @@index([classId])
-}
-
 model Class {
-  id           String  @id @default(uuid())
-  className    String
+  id        String @id @default(uuid())
+  className String
+
   departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-
-  students  Student[]
+  students  User[]
   timetable Timetable[]
+  courses   Course[]    @relation("CourseToClass")
 
-  courses Course[] @relation("CourseToClass")
-
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
   notifications Notification[]
   attendances   Attendance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([className, departmentId])
 }
@@ -325,13 +318,13 @@ model Timetable {
   endTime   DateTime
 
   teacherId String
-  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  teacher   User   @relation(fields: [teacherId], references: [id])
 
   classId String
-  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class   Class  @relation(fields: [classId], references: [id])
 
   courseId String
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
