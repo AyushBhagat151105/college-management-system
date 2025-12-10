@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.58.1",
     "@elysiajs/eden": "^1.4.5",
     "@repo/api": "*",
     "@tailwindcss/vite": "^4.0.6",
