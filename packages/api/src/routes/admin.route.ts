@@ -60,19 +60,51 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .post(
     "/users",
     async ({ auth, clerk, body }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.createUser({
-        ...body,
-        clerkUserId: body.clerkUserId ?? "NO-CLERK-ID",
-      });
+        const user = await clerk.users.createUser({
+          firstName: body.firstName,
+          lastName: body.lastName,
+          emailAddress: [body.email],
+          password: body.password,
+          publicMetadata: {
+            role: body.role,
+          },
+        });
 
-      return { message: "User created successfully", data: res };
+        const data = {
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.emailAddresses[0].emailAddress,
+          role: user.publicMetadata.role,
+          departmentId: body.departmentId || null,
+          classId: body.classId || null,
+          educationYear: body.educationYear || null,
+          // clerkUserId: user.id,
+        };
+
+        const res = await AdminController.createUser({
+          ...data,
+          clerkUserId: user.id,
+        });
+
+        return { message: "User created successfully", data: res };
+      } catch (error: any) {
+        console.log("CREATE USER ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({
-        fullName: t.String(),
+        firstName: t.String(),
+        lastName: t.String(),
         email: t.String(),
+        password: t.String(),
         role: t.String(),
         departmentId: t.Optional(t.String()),
         classId: t.Optional(t.String()),
@@ -86,16 +118,58 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .patch(
     "/users/:id",
     async ({ auth, clerk, params: { id }, body }) => {
-      await verifyAdmin(auth, clerk);
-      const res = await AdminController.updateUserById(id, body);
-      return { message: "User updated successfully", data: res };
+      try {
+        await verifyAdmin(auth, clerk);
+
+        const existingUser = await AdminController.getUserById(id);
+        if (!existingUser) {
+          return { status: 404, error: "User not found" };
+        }
+
+        // Update Clerk user
+        const clerkData: any = {};
+
+        if (body.firstName) clerkData.firstName = body.firstName;
+        if (body.lastName) clerkData.lastName = body.lastName;
+        if (body.password) clerkData.password = body.password;
+        if (body.role) clerkData.publicMetadata = { role: body.role };
+
+        const clerkUser = await clerk.users.updateUser(
+          existingUser.clerkUserId, // MUST PASS ID
+          clerkData // PASS DATA
+        );
+
+        // pass data as a object
+        const updateData = {
+          firstName: clerkUser.firstName,
+          lastName: clerkUser.lastName,
+          role: clerkUser.publicMetadata.role,
+          departmentId: body.departmentId,
+          classId: body.classId,
+          educationYear: body.educationYear ?? existingUser.educationYear,
+        };
+
+        const res = await AdminController.updateUserById(id, updateData);
+
+        return { message: "User updated successfully", data: res };
+      } catch (error: any) {
+        console.log("UPDATE USER ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({
-        fullName: t.Optional(t.String()),
+        firstName: t.Optional(t.String()),
+        lastName: t.Optional(t.String()),
+        password: t.Optional(t.String()),
         role: t.Optional(t.String()),
         departmentId: t.Optional(t.String()),
         classId: t.Optional(t.String()),
+        educationYear: t.Optional(t.String()),
       }),
       detail: { tags: ["Admin - Users"] },
     }
@@ -104,9 +178,28 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .delete(
     "/users/:id",
     async ({ auth, clerk, params: { id } }) => {
-      await verifyAdmin(auth, clerk);
-      await AdminController.deleteUserById(id);
-      return { message: "User deleted successfully" };
+      try {
+        await verifyAdmin(auth, clerk);
+
+        const existingUser = await AdminController.getUserById(id);
+        if (!existingUser) {
+          return { status: 404, error: "User not found" };
+        }
+
+        const deletedUser = await clerk.users.deleteUser(
+          existingUser.clerkUserId
+        );
+
+        await AdminController.deleteUserById(id);
+        return { message: "User deleted successfully", data: deletedUser };
+      } catch (error: any) {
+        console.log("DELETE USER ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     { detail: { tags: ["Admin - Users"] } }
   )
@@ -115,8 +208,17 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .get(
     "/departments",
     async () => {
-      const res = await AdminController.getAllDepartments();
-      return { message: "Departments fetched successfully", data: res };
+      try {
+        const res = await AdminController.getAllDepartments();
+        return { message: "Departments fetched successfully", data: res };
+      } catch (error: any) {
+        console.log("GET DEPARTMENT ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     { detail: { tags: ["Admin - Department"] } }
   )
@@ -124,9 +226,21 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .post(
     "/departments",
     async ({ auth, clerk, body }) => {
-      await verifyAdmin(auth, clerk);
-      const res = await AdminController.createDepartment(body);
-      return { message: "Department created successfully", data: res };
+      try {
+        await verifyAdmin(auth, clerk);
+        if (body.name === "")
+          throw new Error("Please enter the department name");
+
+        const res = await AdminController.createDepartment(body);
+        return { message: "Department created successfully", data: res };
+      } catch (error: any) {
+        console.log("CREATE DEPARTMENT ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({ name: t.String() }),
@@ -137,11 +251,22 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .patch(
     "/departments/:id",
     async ({ auth, clerk, params: { id }, body }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.updateDepartmentById(id, body);
+        if (body.name === "") throw new Error("Please enter the new name");
 
-      return { message: "Department updated successfully", data: res };
+        const res = await AdminController.updateDepartmentById(id, body);
+
+        return { message: "Department updated successfully", data: res };
+      } catch (error: any) {
+        console.log("UPDATE DEPARTMENT ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({ name: t.Optional(t.String()) }),
@@ -152,22 +277,42 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .delete(
     "/departments/:id",
     async ({ auth, clerk, params: { id } }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      await AdminController.deleteDepartmentById(id);
+        await AdminController.deleteDepartmentById(id);
 
-      return { message: "Department deleted successfully" };
+        return { message: "Department deleted successfully" };
+      } catch (error: any) {
+        console.log("DELETE DEPARTMENT ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     { detail: { tags: ["Admin - Department"] } }
   )
+
   // ---- Courses ----
   .get(
     "/courses",
     async ({ auth, clerk }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.getAllCourses();
-      return { message: "Courses fetched successfully", data: res };
+        const res = await AdminController.getAllCourses();
+
+        return { message: "Courses fetched successfully", data: res };
+      } catch (error: any) {
+        console.log("GET COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       detail: { tags: ["Admin - Courses"] },
@@ -177,10 +322,29 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .post(
     "/courses",
     async ({ auth, clerk, body }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.createCourse(body);
-      return { message: "Course created successfully", data: res };
+        if (
+          body.courseCode ||
+          body.courseName ||
+          body.departmentId ||
+          body.semester
+        ) {
+          throw new Error("Please provide all the fields");
+        }
+
+        const res = await AdminController.createCourse(body);
+
+        return { message: "Course created successfully", data: res };
+      } catch (error: any) {
+        console.log("CREATE COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({
@@ -196,10 +360,28 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .patch(
     "/courses/:id",
     async ({ auth, clerk, params: { id }, body }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.updateCourseById(id, body);
-      return { message: "Course updated successfully", data: res };
+        if(!id) throw new Error("Please provide the course 'ID'.")
+
+        const updateData: any = {};
+
+        if (body.courseName !== undefined)
+          updateData.courseName = body.courseName;
+        if (body.teacherId !== undefined) updateData.teacherId = body.teacherId;
+        if (body.semester !== undefined) updateData.semester = body.semester;
+
+        const res = await AdminController.updateCourseById(id, updateData);
+        return { message: "Course updated successfully", data: res };
+      } catch (error: any) {
+        console.log("UPDATE COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({
@@ -214,10 +396,21 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .delete(
     "/courses/:id",
     async ({ auth, clerk, params: { id } }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      await AdminController.deleteCourseById(id);
-      return { message: "Course deleted successfully" };
+        if (id === "") throw new Error("Please provide course 'ID'.");
+
+        await AdminController.deleteCourseById(id);
+        return { message: "Course deleted successfully" };
+      } catch (error: any) {
+        console.log("DELETE COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       detail: { tags: ["Admin - Courses"] },
@@ -228,10 +421,19 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .get(
     "/classes",
     async ({ auth, clerk }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.getAllClasses();
-      return { message: "Classes fetched successfully", data: res };
+        const res = await AdminController.getAllClasses();
+        return { message: "Classes fetched successfully", data: res };
+      } catch (error: any) {
+        console.log("GET COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       detail: { tags: ["Admin - Class"] },
@@ -241,10 +443,22 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .post(
     "/classes",
     async ({ auth, clerk, body }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.createClass(body);
-      return { message: "Class created successfully", data: res };
+        if (body.className || body.departmentId)
+          throw new Error("Please provide course name and department ID");
+
+        const res = await AdminController.createClass(body);
+        return { message: "Class created successfully", data: res };
+      } catch (error: any) {
+        console.log("CREATE COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({
@@ -258,10 +472,24 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .patch(
     "/classes/:id",
     async ({ auth, clerk, body, params: { id } }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      const res = await AdminController.updateClassById(id, body);
-      return { message: "Class updated successfully", data: res };
+        if(!id) throw new Error("Please provide class 'ID'.")
+
+        if (body.className || body.departmentId)
+          throw new Error("Please provide course name and department ID");
+
+        const res = await AdminController.updateClassById(id, body);
+        return { message: "Class updated successfully", data: res };
+      } catch (error: any) {
+        console.log("UPDATE COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       body: t.Object({
@@ -275,10 +503,21 @@ export const adminRouter = new Elysia({ prefix: "/v1/admin" })
   .delete(
     "/classes/:id",
     async ({ auth, params: { id }, clerk }) => {
-      await verifyAdmin(auth, clerk);
+      try {
+        await verifyAdmin(auth, clerk);
 
-      await AdminController.deleteClassById(id);
-      return { message: "Class deleted successfully" };
+        if(!id) throw new Error("Please provide the class 'ID'.")
+
+        await AdminController.deleteClassById(id);
+        return { message: "Class deleted successfully" };
+      } catch (error: any) {
+        console.log("UPDATE COURSES ERROR:", error);
+
+        return {
+          status: 422,
+          error: error?.errors?.[0]?.message || error.message,
+        };
+      }
     },
     {
       detail: { tags: ["Admin - Class"] },

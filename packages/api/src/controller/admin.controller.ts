@@ -1,4 +1,3 @@
-import { clerkClient } from "@clerk/clerk-sdk-node";
 import { prisma } from "../db";
 
 export const AdminController = {
@@ -8,7 +7,8 @@ export const AdminController = {
       select: {
         id: true,
         clerkUserId: true,
-        fullName: true,
+        firstName: true,
+        lastName: true,
         role: true,
         email: true,
         department: true,
@@ -21,6 +21,12 @@ export const AdminController = {
 
   // create user
   createUser: async (data: any) => {
+    const existingUser = await prisma.user.findUnique({
+      where: { clerkUserId: data.clerkUserId },
+    });
+
+    if (existingUser) throw new Error("User already exist");
+
     return prisma.user.create({ data });
   },
 
@@ -31,7 +37,8 @@ export const AdminController = {
       select: {
         id: true,
         clerkUserId: true,
-        fullName: true,
+        firstName: true,
+        lastName: true,
         role: true,
         email: true,
         department: true,
@@ -63,6 +70,8 @@ export const AdminController = {
       select: {
         id: true,
         departmentName: true,
+        classes: true,
+        users: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -82,11 +91,24 @@ export const AdminController = {
 
   // create department
   createDepartment: async (data: { name: string }) => {
+    const existing = await prisma.department.findUnique({
+      where: {
+        departmentName: data.name,
+      },
+    });
+
+    if (existing) throw new Error("Department already exist");
+
     return prisma.department.create({
       data: {
         departmentName: data.name,
       },
-      select: { id: true, departmentName: true },
+      select: {
+        id: true,
+        departmentName: true,
+        users: true,
+        classes: true,
+      },
     });
   },
 
@@ -99,7 +121,12 @@ export const AdminController = {
     return prisma.department.update({
       where: { id },
       data: updateData,
-      select: { id: true, departmentName: true },
+      select: {
+        id: true,
+        departmentName: true,
+        users: true,
+        classes: true,
+      },
     });
   },
 
@@ -114,15 +141,29 @@ export const AdminController = {
   // Get all courses
   getAllCourses: async () => {
     return prisma.course.findMany({
+      // where: {
+      //   teacher: {
+      //     is: { role: "TEACHER" },
+      //   },
+      // },
       include: {
         department: true,
         teacher: true,
+        classes: true,
       },
     });
   },
 
   // Create new course
   createCourse: async (data: any) => {
+    const existingCourse = await prisma.course.findUnique({
+      where: {
+        courseCode: data.courseCode,
+      },
+    });
+
+    if (existingCourse) throw new Error("Course is already exist");
+
     return prisma.course.create({
       data: {
         courseCode: data.courseCode,
@@ -160,12 +201,26 @@ export const AdminController = {
     return prisma.class.findMany({
       include: {
         department: true,
+        courses: true,
+        students: true,
+        timetable: true,
+        attendances: true,
       },
     });
   },
 
   // Create new class
   createClass: async (data: any) => {
+    const existingClass = await prisma.class.findFirst({
+      where: {
+        className: data.className,
+        departmentId: data.departmentId,
+      },
+    });
+
+    if (existingClass)
+      throw new Error("Class is already exist in the department");
+
     return prisma.class.create({
       data: {
         className: data.className,
@@ -176,6 +231,16 @@ export const AdminController = {
 
   // Update class
   updateClassById: async (id: string, data: any) => {
+    const existingClass = await prisma.class.findFirst({
+      where: {
+        className: data.className,
+        departmentId: data.departmentId,
+      },
+    });
+
+    if (!existingClass) throw new Error("Class not exist in the department");
+    if (existingClass) throw new Error("Class already exist in the department");
+
     const updateData: any = {};
 
     if (data.className) updateData.className = data.className;
@@ -184,6 +249,13 @@ export const AdminController = {
     return prisma.class.update({
       where: { id },
       data: updateData,
+      select: {
+        className: true,
+        departmentId: true,
+        department: true,
+        students: true,
+        timetable: true,
+      },
     });
   },
 
