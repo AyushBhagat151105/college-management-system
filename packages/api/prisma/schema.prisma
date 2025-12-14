@@ -28,7 +28,7 @@ enum EducationYear {
 model User {
   id          String  @id @default(uuid())
   clerkUserId String  @unique
-  firstName    String
+  firstName   String
   lastName    String
   email       String  @unique
   profileImg  String?
@@ -312,6 +312,12 @@ model Class {
   @@unique([className, departmentId])
 }
 
+enum TimetableStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Timetable {
   id        String   @id @default(uuid())
   day       String
@@ -326,6 +332,10 @@ model Timetable {
 
   courseId String
   course   Course @relation(fields: [courseId], references: [id])
+
+  status     TimetableStatus @default(PENDING)
+  approvedBy String?
+  approvedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -14,7 +14,7 @@ async function verifyAdmin(auth: any, clerk: any) {
 
   if (!role) throw new Error("User role missing in Clerk publicMetadata");
 
-  const allowedRoles = ["ADMIN", "HOD"];
+  const allowedRoles = ["ADMIN"];
 
   if (!allowedRoles.includes(role)) {
     throw new Error("Unauthorized access admin role required");
