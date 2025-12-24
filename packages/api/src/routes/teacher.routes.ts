@@ -14,11 +14,11 @@ async function verifyTeacher(auth: any, clerk: any) {
 
   if (!role) throw new Error("User role missing in Clerk publicMetadata");
 
-  // todo: for production i have write admin also access hod route after complete change this
+  // todo: for production i have write admin also access teacher route after complete change this
   const allowedRoles = ["TEACHER","ADMIN"];
 
   if (!allowedRoles.includes(role)) {
-    throw new Error("Unauthorized access HOD role required");
+    throw new Error("Unauthorized access TEACHER role required");
   }
 
   return { userId, role };
